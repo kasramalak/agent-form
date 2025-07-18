@@ -59,7 +59,7 @@ if($agent_display != 'none') {
 <style>
 .agent-form-modern .form-group {
   position: relative;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 .agent-form-modern .form-control {
   background: #fff;
@@ -437,14 +437,14 @@ if($agent_display != 'none') {
     <input type="hidden" name="is_listing_form" value="yes">
     <input type="hidden" name="agent_id" value="<?php echo intval($return_array['agent_id']); ?>">
     <input type="hidden" name="agent_type" value="<?php echo esc_attr($return_array['agent_type']); ?>">
-    <div class="d-flex gap-3">
-      <button type="submit" class="btn btn-primary btn-modern flex-fill"><i class="fas fa-paper-plane me-2"></i>Send Message</button>
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-modern flex-grow-1"><i class="fas fa-paper-plane me-2"></i>Send Message</button>
       <?php if ($return_array['is_single_agent'] && !empty($agent_number) && $agent_mobile_num && !wp_is_mobile()): ?>
-      <a href="tel:<?php echo esc_attr($agent_mobile_call); ?>" class="btn btn-outline-primary btn-modern flex-fill"><i class="fas fa-phone-alt me-2"></i>Call</a>
+      <a href="tel:<?php echo esc_attr($agent_mobile_call); ?>" class="btn btn-outline-primary btn-modern flex-grow-1"><i class="fas fa-phone-alt me-2"></i>Call</a>
       <?php endif; ?>
     </div>
     <?php if ($return_array['is_single_agent'] && !empty($agent_whatsapp_call) && $agent_whatsapp_num): ?>
-    <a target="_blank" href="https://api.whatsapp.com/send?phone=<?php echo esc_attr($agent_whatsapp_call); ?>&text=<?php echo houzez_option('spl_con_interested', "Hello, I am interested in").' ['.get_the_title().'] '.get_permalink(); ?>" class="btn btn-success btn-modern w-100 mt-3"><i class="fab fa-whatsapp me-2"></i>WhatsApp</a>
+    <a target="_blank" href="https://api.whatsapp.com/send?phone=<?php echo esc_attr($agent_whatsapp_call); ?>&text=<?php echo houzez_option('spl_con_interested', "Hello, I am interested in").' ['.get_the_title().'] '.get_permalink(); ?>" class="btn btn-success btn-modern w-100 mt-2"><i class="fab fa-whatsapp me-2"></i>WhatsApp</a>
     <?php endif; ?>
   </form>
 </div>
