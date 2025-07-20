@@ -195,21 +195,23 @@ const cheerio = require('cheerio');
 
 function parseOverview(html) {
   const $ = cheerio.load(html);
-  const address = $('.property-address').text().trim();
-  return { address };
+  const address = $('.property-address-wrap .list-lined').text().trim();
+  const title = $('h1.page-title').text().trim();
+  return { address, title };
 }
 
 function parseMultipleUnits(html) {
   const $ = cheerio.load(html);
   const units = [];
 
-  $('.multiple-units-table tbody tr').each((i, row) => {
-    const columns = $(row).find('td');
+  $('.inventory-item').each((i, item) => {
+    const table = $(item).find('.multi-units-table');
     const unit = {
-      type: $(columns[0]).text().trim(),
-      size: $(columns[1]).text().trim(),
-      bedrooms: $(columns[2]).text().trim(),
-      price: $(columns[3]).text().trim(),
+      title: table.find('td').eq(0).text().trim(),
+      type: table.find('td').eq(1).text().trim(),
+      price: table.find('td').eq(2).text().trim(),
+      bedrooms: table.find('td').eq(3).text().trim(),
+      size: table.find('td').eq(4).text().trim(),
     };
     units.push(unit);
   });
