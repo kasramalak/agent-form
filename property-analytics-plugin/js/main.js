@@ -13,8 +13,8 @@ jQuery(document).ready(function($) {
                 title: table.find('td').eq(0).text().trim(),
                 type: table.find('td').eq(1).text().trim(),
                 price: table.find('td').eq(2).text().trim(),
-                bedrooms: table.find('td').eq(4).text().trim(),
-                size: table.find('td').eq(3).text().trim(),
+                bedrooms: table.find('td').eq(3).text().trim(),
+                size: table.find('td').eq(4).text().trim(),
             };
             units.push(unit);
         });
@@ -114,17 +114,20 @@ jQuery(document).ready(function($) {
         });
     }
 
+    const processedUnits = [];
+
     async function main() {
-        if ($('body').hasClass('analytics-loaded')) {
-            return;
-        }
-
-        $('body').addClass('analytics-loaded');
-
         const overview = parseOverview();
         const units = parseMultipleUnits();
 
         for (const unit of units) {
+            const unitIdentifier = `${unit.title}-${unit.size}-${unit.bedrooms}`;
+            if (processedUnits.includes(unitIdentifier)) {
+                continue;
+            }
+
+            processedUnits.push(unitIdentifier);
+
             const data = {
                 action: 'get_property_analytics',
                 nonce: property_analytics.nonce,
