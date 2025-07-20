@@ -180,30 +180,41 @@ function createPricePerSqFtGraph(valuationData) {
 }
 
 async function main(html) {
-  const inventory = parseInventoryTable(html);
-  const valuations = await getInventoryValuations(inventory);
-  displayAnalytics(valuations);
+  const overview = parseOverview(html);
+  const units = parseMultipleUnits(html);
+
+  for (const unit of units) {
+    const analytics = await generateUnitAnalytics(unit, overview.address);
+    if (analytics) {
+      displayUnitAnalytics(unit, analytics);
+    }
+  }
 }
 
 const cheerio = require('cheerio');
 
-function parseInventoryTable(html) {
+function parseOverview(html) {
   const $ = cheerio.load(html);
-  const inventory = [];
+  const address = $('.property-address').text().trim();
+  return { address };
+}
 
-  $('.inventory-table tbody tr').each((i, row) => {
+function parseMultipleUnits(html) {
+  const $ = cheerio.load(html);
+  const units = [];
+
+  $('.multiple-units-table tbody tr').each((i, row) => {
     const columns = $(row).find('td');
-    const property = {
-      title: $(columns[0]).text().trim(),
-      propertyType: $(columns[1]).text().trim(),
-      price: $(columns[2]).text().trim(),
-      size: $(columns[3]).text().trim(),
-      bedrooms: $(columns[4]).text().trim(),
+    const unit = {
+      type: $(columns[0]).text().trim(),
+      size: $(columns[1]).text().trim(),
+      bedrooms: $(columns[2]).text().trim(),
+      price: $(columns[3]).text().trim(),
     };
-    inventory.push(property);
+    units.push(unit);
   });
 
-  return inventory;
+  return units;
 }
 
 async function getInventoryValuations(inventory) {
@@ -224,44 +235,113 @@ async function getInventoryValuations(inventory) {
   return valuations;
 }
 
-function displayAnalytics(valuations) {
-  const container = document.getElementById('analytics-container');
+function calculateAveragePriceForBedrooms(valuationData, bedrooms) {
+  const sales = valuationData.estimate.sale.comparables.government_transactions;
+  const rents = valuationData.estimate.rent.comparables.government_transactions;
+  let saleTotal = 0;
+  let saleCount = 0;
+  let rentTotal = 0;
+  let rentCount = 0;
+
+  for (const transaction of sales) {
+    if (parseInt(transaction.room_type) === bedrooms) {
+      saleTotal += transaction.price_aed;
+      saleCount++;
+    }
+  }
+
+  for (const transaction of rents) {
+    if (parseInt(transaction.room_type) === bedrooms) {
+      rentTotal += transaction.price_aed;
+      rentCount++;
+    }
+  }
+
+  return {
+    sale: saleCount > 0 ? saleTotal / saleCount : 0,
+    rent: rentCount > 0 ? rentTotal / rentCount : 0,
+  };
+}
+
+function getRecentTransactions(valuationData) {
+  return {
+    sales: valuationData.estimate.sale.comparables.government_transactions.slice(0, 3),
+    rents: valuationData.estimate.rent.comparables.government_transactions.slice(0, 3),
+  };
+}
+
+function calculateAveragePriceForType(valuationData) {
+  const sales = valuationData.estimate.sale.comparables.government_transactions;
+  let total = 0;
+
+  for (const transaction of sales) {
+    total += transaction.price_aed;
+  }
+
+  return sales.length > 0 ? total / sales.length : 0;
+}
+
+async function generateUnitAnalytics(unit, address) {
+  const pslCode = await getPslCode(address);
+  if (!pslCode) {
+    return null;
+  }
+
+  const sizeSqm = parseFloat(unit.size) * 0.092903; // Convert sqft to sqm
+  const bedrooms = parseInt(unit.bedrooms);
+  const segment = unit.type.toLowerCase().includes('apartment') ? 2 : 1; // 2 for apartment, 1 for villa
+
+  const valuationData = await getValuation(pslCode, segment, sizeSqm, bedrooms);
+  if (!valuationData) {
+    return null;
+  }
+
+  const averagePrices = calculateAveragePriceForBedrooms(valuationData, bedrooms);
+  const recentTransactions = getRecentTransactions(valuationData);
+  const averagePriceForType = calculateAveragePriceForType(valuationData);
+
+  return {
+    averagePrices,
+    recentTransactions,
+    averagePriceForType,
+  };
+}
+
+function displayUnitAnalytics(unit, analytics) {
+  const container = document.querySelector('.multiple-units-container');
   if (!container) {
-    console.error('Analytics container not found');
+    console.error('Multiple units container not found');
     return;
   }
 
-  for (const valuation of valuations) {
-    const valuationContainer = document.createElement('div');
-    valuationContainer.classList.add('valuation-item');
-
-    const averagePrices = calculateAveragePrices(valuation);
-    const averagePricesElement = document.createElement('div');
-    averagePricesElement.innerHTML = `
+  const unitContainer = document.createElement('div');
+  unitContainer.classList.add('unit-analytics');
+  unitContainer.innerHTML = `
+    <h2>Analytics for ${unit.type}</h2>
+    <div>
       <h3>Average Prices</h3>
-      <p><strong>Sale (1-bed):</strong> AED ${averagePrices.sale['1-bed'].average.toFixed(2)}</p>
-      <p><strong>Sale (2-bed):</strong> AED ${averagePrices.sale['2-bed'].average.toFixed(2)}</p>
-      <p><strong>Sale (3-bed):</strong> AED ${averagePrices.sale['3-bed'].average.toFixed(2)}</p>
-      <p><strong>Rent (1-bed):</strong> AED ${averagePrices.rent['1-bed'].average.toFixed(2)}</p>
-      <p><strong>Rent (2-bed):</strong> AED ${averagePrices.rent['2-bed'].average.toFixed(2)}</p>
-      <p><strong>Rent (3-bed):</strong> AED ${averagePrices.rent['3-bed'].average.toFixed(2)}</p>
-    `;
-    valuationContainer.appendChild(averagePricesElement);
+      <p><strong>Sale:</strong> AED ${analytics.averagePrices.sale.toFixed(2)}</p>
+      <p><strong>Rent:</strong> AED ${analytics.averagePrices.rent.toFixed(2)}</p>
+    </div>
+    <div>
+      <h3>Recent Sales Transactions</h3>
+      <ul>
+        ${analytics.recentTransactions.sales.map(t => `<li>${t.transaction_date}: AED ${t.price_aed}</li>`).join('')}
+      </ul>
+    </div>
+    <div>
+      <h3>Recent Rent Transactions</h3>
+      <ul>
+        ${analytics.recentTransactions.rents.map(t => `<li>${t.start_date}: AED ${t.price_aed}</li>`).join('')}
+      </ul>
+    </div>
+    <div>
+      <h3>Average Price for ${unit.type}</h3>
+      <p>AED ${analytics.averagePriceForType.toFixed(2)}</p>
+    </div>
+  `;
 
-    const recentTransactionsElement = document.createElement('div');
-    recentTransactionsElement.innerHTML = '<h3>Recent Transactions</h3>';
-    displayRecentTransactions(valuation); // This function needs to be adapted to append to the element
-    valuationContainer.appendChild(recentTransactionsElement);
-
-    const graphElement = document.createElement('div');
-    graphElement.innerHTML = '<h3>Price per Sq Ft Graph</h3>';
-    const canvas = document.createElement('canvas');
-    graphElement.appendChild(canvas);
-    createPricePerSqFtGraph(valuation, canvas); // This function needs to be adapted to draw on the canvas
-    valuationContainer.appendChild(graphElement);
-
-    container.appendChild(valuationContainer);
-  }
+  container.appendChild(unitContainer);
 }
 
 module.exports = {
