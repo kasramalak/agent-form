@@ -52,8 +52,66 @@ jQuery(document).ready(function($) {
                 <h3>Average Price for ${unit.type}</h3>
                 <p>AED ${analytics.averagePriceForType.toFixed(2)}</p>
             </div>
+            <div>
+                <h3>Price per Sq Ft Graph</h3>
+                <canvas></canvas>
+            </div>
         `);
         container.append(unitContainer);
+    }
+
+    function createPricePerSqFtGraph(canvas, valuationData) {
+        const sales = valuationData.recentTransactions.sales;
+        const monthlyData = {};
+
+        for (const transaction of sales) {
+            const date = new Date(transaction.transaction_date);
+            const month = date.toLocaleString('default', { month: 'long' });
+            const year = date.getFullYear();
+            const key = `${month} ${year}`;
+
+            if (!monthlyData[key]) {
+                monthlyData[key] = { total: 0, count: 0, average: 0 };
+            }
+
+            monthlyData[key].total += transaction.price_aed / transaction.size_sqm;
+            monthlyData[key].count++;
+        }
+
+        const labels = [];
+        const data = [];
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        for (const key in monthlyData) {
+            const [month, year] = key.split(' ');
+            const date = new Date(`${month} 1, ${year}`);
+            if (date >= threeMonthsAgo) {
+                labels.push(key);
+                data.push(monthlyData[key].total / monthlyData[key].count);
+            }
+        }
+
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Average Price per Sq Ft (Sale)',
+                    data: data,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
     }
 
     async function main() {
@@ -71,6 +129,8 @@ jQuery(document).ready(function($) {
             $.post(property_analytics.ajax_url, data, function(response) {
                 if (response.success) {
                     displayUnitAnalytics(unit, response.data);
+                    const canvas = $(`.unit-analytics:last`).find('canvas')[0];
+                    createPricePerSqFtGraph(canvas, response.data);
                 }
             });
         }
