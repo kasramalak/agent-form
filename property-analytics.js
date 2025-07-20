@@ -196,7 +196,7 @@ const cheerio = require('cheerio');
 function parseOverview(html) {
   const $ = cheerio.load(html);
   const address = $('.property-address-wrap .list-lined').text().trim();
-  const title = $('h1.page-title').text().trim();
+  const title = $('.page-title h1').text().trim();
   return { address, title };
 }
 
