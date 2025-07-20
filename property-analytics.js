@@ -2,7 +2,7 @@
 
 const unirest = require('unirest');
 
-async function getPslCode(address) {
+async function getPslCode(address = "JVC, Dubai") {
   const response = await unirest
     .get('https://propsearch.ae/api/vista/smart-match')
     .headers({
@@ -179,18 +179,88 @@ function createPricePerSqFtGraph(valuationData) {
   });
 }
 
-async function main() {
-  const address = 'dubai,marsa dubai,torch tower';
-  const pslCode = await getPslCode(address);
+async function main(html) {
+  const inventory = parseInventoryTable(html);
+  const valuations = await getInventoryValuations(inventory);
+  displayAnalytics(valuations);
+}
+
+const cheerio = require('cheerio');
+
+function parseInventoryTable(html) {
+  const $ = cheerio.load(html);
+  const inventory = [];
+
+  $('.inventory-table tbody tr').each((i, row) => {
+    const columns = $(row).find('td');
+    const property = {
+      title: $(columns[0]).text().trim(),
+      propertyType: $(columns[1]).text().trim(),
+      price: $(columns[2]).text().trim(),
+      size: $(columns[3]).text().trim(),
+      bedrooms: $(columns[4]).text().trim(),
+    };
+    inventory.push(property);
+  });
+
+  return inventory;
+}
+
+async function getInventoryValuations(inventory) {
+  const valuations = [];
+  const pslCode = await getPslCode();
 
   if (pslCode) {
-    const valuationData = await getValuation(pslCode, 2, 123.4, 2);
-    if (valuationData) {
-      const averagePrices = calculateAveragePrices(valuationData);
-      displayAveragePrices(averagePrices);
-      displayRecentTransactions(valuationData);
-      createPricePerSqFtGraph(valuationData);
+    for (const item of inventory) {
+      const sizeSqm = parseFloat(item.size) * 0.092903; // Convert sqft to sqm
+      const bedrooms = parseInt(item.bedrooms);
+      const segment = item.propertyType.toLowerCase().includes('apartment') ? 2 : 1; // 2 for apartment, 1 for villa
+
+      const valuation = await getValuation(pslCode, segment, sizeSqm, bedrooms);
+      valuations.push(valuation);
     }
+  }
+
+  return valuations;
+}
+
+function displayAnalytics(valuations) {
+  const container = document.getElementById('analytics-container');
+  if (!container) {
+    console.error('Analytics container not found');
+    return;
+  }
+
+  for (const valuation of valuations) {
+    const valuationContainer = document.createElement('div');
+    valuationContainer.classList.add('valuation-item');
+
+    const averagePrices = calculateAveragePrices(valuation);
+    const averagePricesElement = document.createElement('div');
+    averagePricesElement.innerHTML = `
+      <h3>Average Prices</h3>
+      <p><strong>Sale (1-bed):</strong> AED ${averagePrices.sale['1-bed'].average.toFixed(2)}</p>
+      <p><strong>Sale (2-bed):</strong> AED ${averagePrices.sale['2-bed'].average.toFixed(2)}</p>
+      <p><strong>Sale (3-bed):</strong> AED ${averagePrices.sale['3-bed'].average.toFixed(2)}</p>
+      <p><strong>Rent (1-bed):</strong> AED ${averagePrices.rent['1-bed'].average.toFixed(2)}</p>
+      <p><strong>Rent (2-bed):</strong> AED ${averagePrices.rent['2-bed'].average.toFixed(2)}</p>
+      <p><strong>Rent (3-bed):</strong> AED ${averagePrices.rent['3-bed'].average.toFixed(2)}</p>
+    `;
+    valuationContainer.appendChild(averagePricesElement);
+
+    const recentTransactionsElement = document.createElement('div');
+    recentTransactionsElement.innerHTML = '<h3>Recent Transactions</h3>';
+    displayRecentTransactions(valuation); // This function needs to be adapted to append to the element
+    valuationContainer.appendChild(recentTransactionsElement);
+
+    const graphElement = document.createElement('div');
+    graphElement.innerHTML = '<h3>Price per Sq Ft Graph</h3>';
+    const canvas = document.createElement('canvas');
+    graphElement.appendChild(canvas);
+    createPricePerSqFtGraph(valuation, canvas); // This function needs to be adapted to draw on the canvas
+    valuationContainer.appendChild(graphElement);
+
+    container.appendChild(valuationContainer);
   }
 }
 
@@ -201,5 +271,8 @@ module.exports = {
   displayAveragePrices,
   displayRecentTransactions,
   createPricePerSqFtGraph,
+  parseInventoryTable,
+  getInventoryValuations,
+  displayAnalytics,
   main,
 };
